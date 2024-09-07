@@ -3,18 +3,49 @@
 <head>
     <title>Paintball Split Deck Timer with Pause and Audio Control</title>
     <style>
-       body { text-align: center; font-family: Arial, sans-serif; }
-        #gameTimer { margin: 0 auto; text-align: center; }
-        .label { font-size: 2em; margin: 10px; }
-        .timer { font-size: 3em; margin: 20px; }
-        button { font-size: 1.5em; padding: 15px 30px; margin: 10px; display: block; width: 60%; margin-left: auto; margin-right: auto; }
-        input { font-size: 1.2em; padding: 10px; margin: 10px; }
-        .timer-controls { margin: 20px; }
+        body { 
+            text-align: center; 
+            font-family: Arial, sans-serif; 
+        }
+
+        #gameTimer { 
+            margin: 0 auto; 
+            text-align: center; 
+        }
+
+        .label { 
+            font-size: 2em; 
+            margin: 10px; 
+        }
+
+        .timer { 
+            font-size: 3em; 
+            margin: 20px; 
+        }
+
+        /* Update button styles to make them twice as large vertically */
+        button { 
+            font-size: 1.5em; 
+            padding: 30px 30px; /* Adjust padding to make the buttons taller */
+            margin: 10px; 
+            display: block; 
+            width: 60%; 
+            margin-left: auto; 
+            margin-right: auto; 
+        }
+
+        input { 
+            font-size: 1.2em; 
+            padding: 10px; 
+            margin: 10px; 
+        }
+
+        .timer-controls { 
+            margin: 20px; 
+        }
     </style>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-
-
 </head>
 <body>
     <h1>Paintball Split Deck Timer Control with Pause and Audio Management</h1>
@@ -59,6 +90,8 @@
     <audio id="60secondwarningAudio" src="60secondwarning.mp3" preload="auto"></audio>
     <audio id="gamefinishedAudio" src="gamefinished.mp3" preload="auto"></audio>
 </body>
+</html>
+
 
     <script>
         const firebaseConfig = {
