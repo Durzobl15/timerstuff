@@ -82,7 +82,7 @@
         function pollFlagHang() {
         // This will check every 5 seconds if a flag hang event has been triggered
         setInterval(() => {
-            fetch('https://snipersdentiming.netlify.app/.netlify/functions/flagHang')
+            fetch('https://snipertournamenttimer.netlify.app/.netlify/functions/flagHang')
             .then(response => response.json())
             .then(data => {
                 if (data.message === 'Flag Hang Triggered') {
