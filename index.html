@@ -26,7 +26,7 @@
         /* Update button styles to make them twice as large vertically */
         button { 
             font-size: 1.5em; 
-            padding: 30px 30px; /* Adjust padding to make the buttons taller */
+            padding: 30px 60px; /* Adjust padding to make the buttons taller */
             margin: 10px; 
             display: block; 
             width: 60%; 
@@ -41,7 +41,7 @@
         }
 
         .timer-controls { 
-            margin: 20px; 
+            margin: 40px; 
         }
     </style>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -56,8 +56,6 @@
             <button onclick="pauseGameTimer(1)">Pause Game Timer</button> <!-- Pause button for game timer -->
 
             <div id="breakTimer1" class="timer">BREAK: 00:00</div>
-            <button onclick="pauseBreakTimer(1)">Pause Break Timer</button> <!-- Pause button for break timer -->
-
             <!-- Manual time setting -->
             <div>
                 <input id="manualTime1" type="number" placeholder="Enter time in seconds">
