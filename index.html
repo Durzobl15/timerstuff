@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Paintball Split Deck Timer with Pause and Audio Control</title>
+    <style>
+       body { text-align: center; font-family: Arial, sans-serif; }
+        #gameTimer { margin: 0 auto; text-align: center; }
+        .label { font-size: 2em; margin: 10px; }
+        .timer { font-size: 3em; margin: 20px; }
+        button { font-size: 1.5em; padding: 15px 30px; margin: 10px; display: block; width: 60%; margin-left: auto; margin-right: auto; }
+        input { font-size: 1.2em; padding: 10px; margin: 10px; }
+        .timer-controls { margin: 20px; }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+
+</head>
+<body>
+    <h1>Paintball Split Deck Timer Control with Pause and Audio Management</h1>
+    <div id="timerContainer" style="text-align: center;">
+        <div id="gameTimer">
+            <div class="label">GAME:</div> <!-- Added the 'GAME' title -->
+            <div id="timer1" class="timer">02:00</div>
+            <button onclick="pauseGameTimer(1)">Pause Game Timer</button> <!-- Pause button for game timer -->
+
+            <div id="breakTimer1" class="timer">BREAK: 00:00</div>
+            <button onclick="pauseBreakTimer(1)">Pause Break Timer</button> <!-- Pause button for break timer -->
+
+            <!-- Manual time setting -->
+            <div>
+                <input id="manualTime1" type="number" placeholder="Enter time in seconds">
+                <button onclick="setCustomTime(1)">Set Game Time</button> <!-- Button to set custom game time -->
+            </div>
+
+            <!-- Control buttons for game actions -->
+            <div class="timer-controls">
+                <button onclick="startNewRound(1)">New Round (2 mins)</button>
+                <button onclick="startNewPoint(1)">New Point (30 seconds)</button>
+                <button onclick="startNewPoint10(1)">New Point (10 seconds)</button>
+                <button onclick="flagHang(1)">Flag Hang</button>
+                <button onclick="gameFinished(1)">Game Finished</button>
+                <button onclick="clearAudio()">Clear Audio</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Control Section -->
+    <div id="audioDisplay">
+        <h3>Currently Playing Audio: <span id="currentlyPlaying">None</span></h3>
+        <button onclick="clearAudio()">Clear Audio</button>
+    </div>
+
+    <!-- Audio Files -->
+    <audio id="newroundAudio" src="newround2mins.mp3" preload="auto"></audio>
+    <audio id="newpointAudio" src="newpoint30secs.mp3" preload="auto"></audio>
+    <audio id="pointoverAudio" src="pointover.mp3" preload="auto"></audio>
+    <audio id="10secondsAudio" src="10seconds.mp3" preload="auto"></audio>
+    <audio id="60secondwarningAudio" src="60secondwarning.mp3" preload="auto"></audio>
+    <audio id="gamefinishedAudio" src="gamefinished.mp3" preload="auto"></audio>
+</body>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyALNi7El1IrFeos7BLDuWUdX4fr_0m-8pw",
+            authDomain: "sniper-s-den-timing.firebaseapp.com",
+            databaseURL: "https://sniper-s-den-timing-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "sniper-s-den-timing",
+            storageBucket: "sniper-s-den-timing.appspot.com",
+            messagingSenderId: "113110567744",
+            appId: "1:113110567744:web:480583718da9da57f008a5"
+        };
+        firebase.initializeApp(firebaseConfig);
+        
+        let timers = {1: {interval: null, time: 120}, 2: {interval: null, time: 120}};
+        let breakTimers = {1: {interval: null, time: 0}, 2: {interval: null, time: 0}};
+        let activeTimers = {1: false, 2: false};
+        let activeBreakTimers = {1: false, 2: false};
+        let currentlyPlayingAudio = null;
+
+        // Sync the timer with Firebase
+        function pollFlagHang() {
+        // This will check every 5 seconds if a flag hang event has been triggered
+        setInterval(() => {
+            fetch('https://snipersdentiming.netlify.app/.netlify/functions/flagHang')
+            .then(response => response.json())
+            .then(data => {
+                if (data.message === 'Flag Hang Triggered') {
+                flagHang(1);  // Call the flagHang function to trigger the action
+                }
+            })
+            .catch(error => console.error('Error fetching flag hang status:', error));
+        }, 500);  // Poll every 5 seconds
+        }
+        document.addEventListener('DOMContentLoaded', (event) => {
+            pollFlagHang();  // Start polling for flag hang events when the page loads
+        });
+        function syncTimer(game) {
+            firebase.database().ref(`game/${game}/paused`).once('value').then((snapshot) => {
+                const isPaused = snapshot.val();
+                if (!isPaused) {  // Only sync the timer if the game is not paused
+                    firebase.database().ref(`game/${game}/timer`).set(timers[game].time);  // Sync the timer to Firebase
+                }
+            });
+        }
+        firebase.database().ref('audio/playing').on('value', (snapshot) => {
+            const audioId = snapshot.val();
+            if (audioId) {
+                playAudio(audioId);  // Trigger audio playback on all users' browsers
+            } else {
+                clearAudioForAll();  // Clear audio for all users when the audio ID is null
+            }
+        });
+        // Sync the break timer with Firebase
+        function syncBreakTimer(game) {
+            firebase.database().ref(`game/${game}/breakTimer`).set(breakTimers[game].time);
+        }
+
+        // Sync audio with Firebase
+        function syncAndPlayAudio(audioId) {
+            firebase.database().ref('audio/playing').set(audioId);
+            playAudio(audioId);  // Play the audio locally for the person who pressed the button
+        }
+
+        // Listen for Firebase changes and update timers
+        function listenForTimerChanges(game) {
+            firebase.database().ref(`game/${game}/timer`).on('value', (snapshot) => {
+                if (snapshot.val() !== null) {
+                    timers[game].time = snapshot.val();
+                    updateTimer(game);
+                }
+            });
+
+            firebase.database().ref(`game/${game}/breakTimer`).on('value', (snapshot) => {
+                if (snapshot.val() !== null) {
+                    breakTimers[game].time = snapshot.val();
+                    updateBreakTimer(game);
+                }
+            });
+        }
+
+        listenForTimerChanges(1);
+        listenForTimerChanges(2);
+
+        function startNewPoint10(game) {
+            syncAndPlayAudio("10secondsAudio");  // Sync and play the 10seconds.mp3 file for all users
+            breakTimers[game].time = 10;  // Set the break timer to 10 seconds
+            syncBreakTimer(game);  // Sync the break timer to Firebase
+            startBreakTimer(game);  // Start the break timer
+        }
+
+        function playAudio(audioId) {
+            if (currentlyPlayingAudio) {
+                currentlyPlayingAudio.pause();
+                currentlyPlayingAudio.currentTime = 0;
+            }
+            currentlyPlayingAudio = document.getElementById(audioId);
+            currentlyPlayingAudio.play();
+            document.getElementById('currentlyPlaying').textContent = audioId.replace('Audio', '').replace(/([A-Z])/g, ' $1').trim();
+        }
+
+        function clearAudio() {
+            if (currentlyPlayingAudio) {
+                currentlyPlayingAudio.pause();
+                currentlyPlayingAudio.currentTime = 0; // Reset the audio playback
+                currentlyPlayingAudio = null;
+                document.getElementById('currentlyPlaying').textContent = 'None';
+            }
+            firebase.database().ref('audio/playing').set(null);  // Sync to all users to clear the audio
+        }
+
+        function clearAudioForAll() {
+            if (currentlyPlayingAudio) {
+                currentlyPlayingAudio.pause();
+                currentlyPlayingAudio.currentTime = 0; // Reset audio
+                currentlyPlayingAudio = null;
+                document.getElementById('currentlyPlaying').textContent = 'None';
+            }
+        }
+        // Function to update the main game timer display
+        function updateTimer(game) {
+            const timerElement = document.getElementById(`timer${game}`);
+            let minutes = Math.floor(timers[game].time / 60);
+            let seconds = timers[game].time % 60;
+            timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // Function to update the break timer display
+        function updateBreakTimer(game) {
+            const breakTimerElement = document.getElementById(`breakTimer${game}`);
+            let minutes = Math.floor(breakTimers[game].time / 60);
+            let seconds = breakTimers[game].time % 60;
+            breakTimerElement.textContent = `BREAK: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function startTimer(game) {
+            firebase.database().ref(`game/${game}/paused`).once('value').then((snapshot) => {
+                const isPaused = snapshot.val();
+                if (!isPaused && !timers[game].interval) {  // Only start the timer if the game is not paused
+                    timers[game].interval = setInterval(() => {
+                        if (timers[game].time > 0) {
+                            timers[game].time--;
+                            updateTimer(game);
+                            syncTimer(game);  // Sync the timer with Firebase
+
+                            // Play the 60-second warning audio when time reaches 60 seconds
+                            if (timers[game].time === 60) {
+                                syncAndPlayAudio("60secondwarningAudio");  // Sync and play the 60-second warning audio
+                            }
+                        } else {
+                            clearInterval(timers[game].interval);
+                            timers[game].interval = null;
+
+                            // Play the game finished audio when the timer reaches 0
+                            syncAndPlayAudio("gamefinishedAudio");
+                        }
+                    }, 1000);  // Countdown every second
+                }
+            });
+        }
+        function resumeTimer(game) {
+            firebase.database().ref(`game/${game}/paused`).set(false);  // Clear the paused state in Firebase
+            startTimer(game);  // Start the game timer after the break
+        }
+
+        function startBreakTimer(game) {
+            if (activeBreakTimers[game]) return;  // Prevent multiple timers from running simultaneously
+            activeBreakTimers[game] = true;
+
+            breakTimers[game].interval = setInterval(() => {
+                if (breakTimers[game].time > 0) {
+                    breakTimers[game].time--;
+                    updateBreakTimer(game);  // Update the break timer display
+                    syncBreakTimer(game);    // Sync the break timer to Firebase
+                } else {
+                    clearInterval(breakTimers[game].interval);  // Stop the break timer when it reaches 0
+                    activeBreakTimers[game] = false;  // Reset the active status
+                    resumeTimer(game);  // Automatically start the game timer after the break ends
+                }
+            }, 1000);  // Countdown every second
+        }
+        function startNewRound(game) {
+            syncAndPlayAudio("newroundAudio");
+            breakTimers[game].time = 120; // Set break timer for 2 minutes
+            syncBreakTimer(game); // Sync with Firebase
+            startBreakTimer(game);
+        }
+
+        function startNewPoint(game) {
+            syncAndPlayAudio("newpointAudio");
+            breakTimers[game].time = 30; // Set break timer for 30 seconds
+            syncBreakTimer(game); // Sync with Firebase
+            startBreakTimer(game);
+        }
+        function pauseTimer(game) {
+            if (timers[game].interval) {
+                clearInterval(timers[game].interval);  // Stop the timer locally
+                timers[game].interval = null;
+                firebase.database().ref(`game/${game}/paused`).set(true);  // Sync paused state to Firebase
+            }
+        }
+        function flagHang(game) {
+            pauseTimer(game);
+            syncAndPlayAudio("pointoverAudio");
+        }
+
+        function gameFinished(game) {
+            pauseTimer(game);
+            syncAndPlayAudio("gamefinishedAudio");
+        }
+
+        function resetTimer(game) {
+            pauseTimer(game);
+            timers[game].time = 120; // Reset to 2 minutes or any desired value
+            updateTimer(game);
+        }
+
+        // Set custom time using the input field
+        function setCustomTime(game) {
+            const input = document.getElementById(`manualTime${game}`);
+            let customTime = parseInt(input.value);
+
+            if (!isNaN(customTime) && customTime >= 0) {
+                pauseTimer(game); // Pause the timer locally
+                timers[game].time = customTime; // Set the custom value for the timer
+                updateTimer(game); // Update the timer display
+                firebase.database().ref(`game/${game}/paused`).set(false);  // Resume the timer by setting paused to false
+                syncTimer(game); // Sync the new time to Firebase so all devices get updated
+            } else {
+                alert("Please enter a valid number of seconds.");
+            }
+        }
+        function pauseGameTimer(game) {
+            if (timers[game].interval) {
+                clearInterval(timers[game].interval);
+                timers[game].interval = null;
+                firebase.database().ref(`game/${game}/paused`).set(true);  // Sync the paused state to Firebase
+            }
+        }
+
+        // Function to pause the break timer
+        function pauseBreakTimer(game) {
+            if (breakTimers[game].interval) {
+                clearInterval(breakTimers[game].interval);
+                breakTimers[game].interval = null;
+                firebase.database().ref(`game/${game}/breakPaused`).set(true);  // Sync the paused state to Firebase
+            }
+        }
+
+        // Listen for pause changes in Firebase
+        firebase.database().ref('game/1/timer').on('value', (snapshot) => {
+            firebase.database().ref('game/1/paused').once('value').then((pausedSnapshot) => {
+                const isPaused = pausedSnapshot.val();
+                if (!isPaused && snapshot.val() !== null) {
+                    timers[1].time = snapshot.val();  // Update the timer only if the game is not paused
+                    updateTimer(1);
+                }
+            });
+        });
+        function listenForPauseChanges(game) {
+            firebase.database().ref(`game/${game}/paused`).on('value', (snapshot) => {
+                const paused = snapshot.val();
+                if (paused) {
+                    clearInterval(timers[game].interval);  // Pause the game timer
+                }
+            });
+
+            firebase.database().ref(`game/${game}/breakPaused`).on('value', (snapshot) => {
+                const paused = snapshot.val();
+                if (paused) {
+                    clearInterval(breakTimers[game].interval);  // Pause the break timer
+                }
+            });
+        }
+
+        // Call this function when initializing to listen for pauses
+        listenForPauseChanges(1);
+    </script>
+
+
+</body>
+</html>
