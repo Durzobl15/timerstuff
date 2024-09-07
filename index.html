@@ -91,7 +91,7 @@
                 }
               })
               .catch(error => console.error('Error fetching flag hang status:', error));
-          }, 200);  // Poll every 5 seconds
+          }, 500);  // Poll every 5 seconds
         }
         document.addEventListener('DOMContentLoaded', (event) => {
             pollFlagHang();  // Start polling for flag hang events when the page loads
